@@ -1,11 +1,26 @@
-import express from "express";
+import express, { response } from "express";
 import mongoose from "mongoose";
-
-
+import session from "express-session";
+import passport from "passport";
+import { userRegistration } from "./middlewares/userRegistration.js";
+import { users } from "./models/userModel.js";
+import { login } from "./middlewares/login.js";
+// import { userSchema } from "./models/userModel";
 const DB = mongoose.connect("mongodb+srv://milton:12345@cluster0.ukmnle3.mongodb.net/");
 DB.then(console.log("Mongoose connected bro"));
 
+
 const app = express()
+//session
+app.use(session({
+    secret: 'ANYthing',
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: true }
+  }))
+
+  app.use(passport.initialize())
+  app.use(passport.session())
 // Middleware to parse JSON and URL-encoded bodies
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -15,63 +30,41 @@ app.listen(8000,()=>{
     console.log("server also running bro")
 })
 
-const userSchema = mongoose.Schema({
-    name:String,
-    email:{
-        type : String,
-    },
-    number:Number
-})
 
-const users = mongoose.model("users",userSchema)
+
+
+// schema
+
+
+//CHANGE: USE "createStrategy" INSTEAD OF "authenticate"
+passport.use(users.createStrategy());
+
+passport.serializeUser(users.serializeUser());
+passport.deserializeUser(users.deserializeUser());
 
 // route 
 app.get("/",(req,res)=>{
     res.send("running")
 })
+app.post("/registration", (req, res) => {
+    // Assuming 'users.register' and 'users.authenticate' are functions provided by Passport or your User model
 
-app.post("/registration",async(req,res)=>{
-    try {
-        const checkExisting = await users.findOne({"email":req.body.email});
-        if(checkExisting){
-            // return res.send(req.body.email) obj pathate hole .json use krte hobe
-            return res.status(400).json({error:"user ase",email :req.body.email})
-        }else{
-            const data = new users({
-                name : req.body.name,
-                email : req.body.email,
-                number : req.body.number,
-            })
-            await data.save();
-            return res.send(data)
+    // Registering a new user
+    users.register({username: req.body.username,email:req.body.email, active: false}, req.body.password, function(err, user) {
+        if (err) {
+            return res.status(400).json({ error: err.message }); // Handle registration error
         }
-    } catch (error) {
-        console.log(error)
-    }
-})
+        res.status(200).json({
+            msg: "hoise"
+        })
+        // // Authenticating the registered user
+        // passport.authenticate('local')(req, response, function () {
+        //     // Authentication successful, but you might want to check 'user' object for additional logic
+        //     res.status(200).json({ message: "Registration successful" });
+        // });
+    });
+});
 
-app.post("/login",async (req,res)=>{
-    try {
-        const data = await users.findOne({"email":req.body.email})
-        if(data){
-            if(data.number=== req.body.number){
-                return res.status(200).json({
-                    "massage": "succes",
-                    "data": data
-                })   
-            }
-            return res.status(401).json({
-                "massage" : "password wrong",
-                "data" : data
-            })
-        }else{
-            return res.status(404).json({
-                "massage" : "user not exist",
-                "data" : data
-            })
-        }
-    } catch (error) {
-        console.log(error)
-    }
-})
+
+app.post("/login",login)
 
